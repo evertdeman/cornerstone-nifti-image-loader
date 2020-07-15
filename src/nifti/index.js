@@ -111,6 +111,7 @@ const nifti = {
   },
 
   ImageId,
+  VolumeAcquisition,
 
   streamingMode: false,
 
