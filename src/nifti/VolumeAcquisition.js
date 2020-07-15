@@ -79,23 +79,43 @@ export default class VolumeAcquisition {
         return;
       }
 
+      console.time('fetch')
       const fileFetchedPromise = this.wholeFileFetcher.fetch(imageIdObject);
 
       fileFetchedPromise.
         // decompress (if compressed) the file raw data
-        then((data) => this[decompress](data, imageIdObject)).
+        then((data) => {
+          console.timeEnd('fetch');
+          console.time('decompress');
+          return this[decompress](data, imageIdObject);
+        }).
         // gather meta data of the file/volume
-        then((data) => this[readMetaData](data)).
+        then((data) => {
+          console.timeEnd('decompress');
+          console.time('readMetaData');
+          return this[readMetaData](data);
+        }).
         // reads the image data and puts it in an ndarray (to be sliced)
-        then((data) => this[readImageData](data)).
+        then((data) => {
+          console.timeEnd('readMetaData');
+          console.time('readImageData');
+          return this[readImageData](data);
+        }).
         // transforms the image data (eg float to int, in case)
-        then((data) => this[transformImageData](data)).
+        then((data) => {
+          console.timeEnd('readImageData');
+          console.time('other wholeFileFetcher functions');
+          return this[transformImageData](data);
+        }).
         // gather meta data that depends on the image data (eg min/max, wc/ww)
         then((data) => this[determineImageDependentMetaData](data)).
         // creates the volume: metadata + image data
         then((data) => this[createVolume](data, imageIdObject)).
         // adds the volume to the cache
-        then((data) => this[cacheVolume](data, imageIdObject)).
+        then((data) => {
+          console.timeEnd('other wholeFileFetcher functions');
+          return this[cacheVolume](data, imageIdObject);
+        }).
         // fulfills the volumeAcquiredPromise
         then((data) => resolve(data)).
         catch(reject);
