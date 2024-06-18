@@ -12,7 +12,7 @@ const _NIFTI2_HEADER_OFFSET = 544;
  * Stream and returns a volume timepoint from a file
  */
 export default class VolumeTimepointFileFetcher {
-  constructor(imageIdObject, {
+  constructor (imageIdObject, {
     method = 'GET',
     responseType = 'arraybuffer',
     beforeSend = noop,
@@ -72,7 +72,7 @@ export default class VolumeTimepointFileFetcher {
   }
 
   static runStreamer (imageIdObject, imageData) {
-    imageData.streamer.stream(imageIdObject, (chunk) => {
+    return imageData.streamer.stream(imageIdObject, (chunk) => {
       if (!imageData.headerParsed) {
         if (!VolumeTimepointFileFetcher.tryParseHeader(imageData, chunk)) {
           return;
@@ -94,6 +94,9 @@ export default class VolumeTimepointFileFetcher {
       VolumeTimepointFileFetcher.addToImageDataBuffer(imageData, chunk);
 
       VolumeTimepointFileFetcher.evaluatePromises(imageData);
+    }).catch((error) => {
+      imageData.headerPromiseMethods.reject(error);
+      throw error;
     });
   }
 
@@ -220,20 +223,11 @@ export default class VolumeTimepointFileFetcher {
 
       return canParse;
     }
-
-    if (imageData.tmpBuffer.length + chunk.length < imageData.headerOffset) {
-      // we don't have enough data, lets add it and wait for next chunk
-      imageData.tmpBuffer = unInt8ArrayConcat(imageData.tmpBuffer, chunk);
-
-      return false;
-    }
-
-
     // we don't want to add the chunk now to tmpBuffer/buffer. This will be handlded by recursion
     let tempBuffer = unInt8ArrayConcat(imageData.tmpBuffer, chunk);
 
     imageData.isCompressed = niftiReader.isCompressed(tempBuffer.buffer);
-    
+
     if (imageData.isCompressed) {
       const inflator = new pako.Inflate();
 
@@ -242,6 +236,12 @@ export default class VolumeTimepointFileFetcher {
       tempBuffer = inflator.result;
     }
 
+    if (tempBuffer.length < imageData.headerOffset) {
+      // we don't have enough data, lets add it and wait for next chunk
+      imageData.tmpBuffer = unInt8ArrayConcat(imageData.tmpBuffer, chunk);
+
+      return false;
+    }
     const rawData = new DataView(tempBuffer.buffer);
     let littleEndian = false;
     const magicCookieVal = niftiReader.Utils.getIntAt(rawData, 0, littleEndian);
@@ -281,7 +281,7 @@ export default class VolumeTimepointFileFetcher {
     return new Uint8Array(buffer);
   }
 
-  static getVolumeTimepointDataLength(header) {
+  static getVolumeTimepointDataLength (header) {
     const dims = header.metaData.header.dims;
     const numBitsPerVoxel = header.metaData.header.numBitsPerVoxel;
     const timeDim = 1;

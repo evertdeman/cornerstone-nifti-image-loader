@@ -1,5 +1,6 @@
 import { external } from '../externalModules.js';
 import decodeNiFTIBigEndian from '../shared/niftiBigEndianDecoder.js';
+import normalizeInvalid from '../shared/normalizeInvalid.js';
 
 export function parseNiftiHeader (fileData) {
   const nifti = external.niftiReader;
@@ -65,7 +66,7 @@ export function parseNiftiFile (fileData, metaData) {
   const arraybuffer = nifti.readImage(metaData.header, fileData);
 
   // reads the image data using nifti-reader-js and puts it in a typed array
-  let imageData = new TypedArrayConstructor(arraybuffer);
+  let imageData = normalizeInvalid(metaData.header.datatypeCode, new TypedArrayConstructor(arraybuffer));
 
   if (!metaData.header.littleEndian) {
     imageData = decodeNiFTIBigEndian(metaData.header.datatypeCode, imageData);
@@ -126,7 +127,7 @@ function ensureUnitInMillimeters (nifti, header) {
 
 function getOrientationMatrix (header) {
   if (header.affine && header.sform_code > 0) {
-    return header.affine;
+    return header.affine.map((row) => row.slice());
   }
 
   if (header.qform_code > 0) {
@@ -173,7 +174,9 @@ function niftiDatatypeCodeToTypedArray (nifti, datatypeCode) {
     [nifti.NIFTI1.TYPE_RGB]: Uint8Array,
     [nifti.NIFTI1.TYPE_RGBA]: Uint8Array
   };
-
+  if (!typedArrayConstructorMap.hasOwnProperty(datatypeCode)) {
+    throw new Error(`Could not parse NIfTI file. Datatype Code (${datatypeCode}) is not supported for this image.`);
+  }
   return typedArrayConstructorMap[datatypeCode];
 }
 

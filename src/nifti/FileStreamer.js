@@ -1,5 +1,6 @@
 import * as http from 'stream-http';
 import cornerstoneEvents from './cornerstoneEvents.js';
+import VolumeAcquisition from './VolumeAcquisition.js';
 
 export default class FileStreamer {
   constructor (options) {
@@ -26,9 +27,11 @@ export default class FileStreamer {
       (response) => {
         const contentLength = response.headers['Content-Length'] || response.headers['content-length'] || 0;
         const progressCallback = progress(imageIdObject.filePath, imageIdObject.url, this.options, eventParams);
+        const responseBytes = new Uint8Array(contentLength);
         let bytesRead = 0;
 
         response.on('data', (chunk) => {
+          responseBytes.set(chunk, bytesRead);
           bytesRead += chunk.length;
 
           progressCallback({
@@ -37,11 +40,15 @@ export default class FileStreamer {
               total: contentLength
             }
           });
-          handleChunk(chunk, imageIdObject);
+          try {
+            handleChunk(chunk, imageIdObject);
+          } catch (error) {
+            reject(error);
+          }
         });
 
         response.on('end', () => {
-          resolve();
+          resolve(responseBytes.buffer);
         });
       });
 
@@ -51,6 +58,12 @@ export default class FileStreamer {
         reject(new Error(errorDescription));
       });
     });
+    const fileFetcher = VolumeAcquisition.getInstance(this.httpHeaders).wholeFileFetcher;
+
+    // save this promise to the file fetcher promise cache
+    if (!fileFetcher.getFetchPromiseFromCache(imageIdObject)) {
+      fileFetcher.addFetchPromiseToCache(fileStreamPromise, imageIdObject);
+    }
 
     return fileStreamPromise;
   }

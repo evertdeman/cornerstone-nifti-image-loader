@@ -45,7 +45,7 @@ const nifti = {
     return promise;
   },
 
-  loadVolumeTimepoint(imageId) {
+  loadVolumeTimepoint (imageId) {
     let promise;
 
     try {
@@ -92,6 +92,8 @@ const nifti = {
           metaDataManager.add(imageIdObject.url, slice.compoundMetaData);
 
           return slice.compoundMetaData;
+        }).catch((error) => {
+          throw error;
         });
 
     } catch (error) {
@@ -115,7 +117,7 @@ const nifti = {
 
   streamingMode: false,
 
-  cornerstoneLoader(imageId) {
+  cornerstoneLoader (imageId) {
     if (this.streamingMode) {
       return this.loadVolumeTimepoint(imageId);
     }
@@ -125,7 +127,8 @@ const nifti = {
 
   register (cornerstone) {
     cornerstone.registerImageLoader('nifti', (imageId) => this.cornerstoneLoader(imageId, this));
-    cornerstone.metaData.addProvider(metaDataProvider);
+    // consider nifti provider to have higher priority (usually apps, as OHIF, has providers priority less than 9999)
+    cornerstone.metaData.addProvider(metaDataProvider, 10000);
   },
 
   configure (loaderOptions) {
